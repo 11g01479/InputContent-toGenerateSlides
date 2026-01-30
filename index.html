@@ -4,458 +4,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>プレゼンテーション自動生成アプリ</title>
+    <title>プレゼン生成 AI - 無料版</title>
     <style>
         :root {
             --primary-color: #007bff;
-            --secondary-color: #6c757d;
-            --background-color: #f8f9fa;
+            --background-color: #f4f7f9;
             --surface-color: #ffffff;
-            --text-color: #212529;
-            --border-color: #dee2e6;
-            --shadow-color: rgba(0, 0, 0, 0.1);
-            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --text-color: #333;
+            --error-color: #d9534f;
+            --info-bg: #e7f3ff;
+            --info-border: #b6d4fe;
         }
 
         body {
-            font-family: var(--font-family);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--background-color);
             color: var(--text-color);
             margin: 0;
             padding: 2rem;
-            line-height: 1.6;
             display: flex;
             justify-content: center;
         }
 
         .container {
-            max-width: 900px;
+            max-width: 800px;
             width: 100%;
         }
 
-        h1 {
-            color: var(--primary-color);
+        .header {
             text-align: center;
             margin-bottom: 2rem;
         }
 
-        /* How to Use Guide */
-        .how-to-use {
-            background-color: #eef7ff;
-            border: 1px solid #cce4ff;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-            padding: 0.5rem 1.5rem;
-            transition: all 0.3s ease-in-out;
-        }
-        .how-to-use[open] {
-            padding-bottom: 1.5rem;
-        }
-
-        .how-to-use summary {
-            font-weight: 600;
-            font-size: 1.2rem;
-            color: var(--primary-color);
-            cursor: pointer;
-            padding: 0.5rem 0;
-            outline: none;
-            list-style: none; /* For Firefox */
-        }
-        .how-to-use summary::-webkit-details-marker {
-            display: none; /* For Chrome/Safari */
-        }
-
-        .how-to-use summary::before {
-            content: '▶';
-            margin-right: 0.75rem;
-            display: inline-block;
-            font-size: 0.9rem;
-            transition: transform 0.2s;
-        }
-
-        .how-to-use[open] summary::before {
-            transform: rotate(90deg);
-        }
-        
-        .how-to-use-content {
-            padding-top: 1rem;
-            border-top: 1px solid #cce4ff;
-        }
-
-        .how-to-use-content .step {
-            margin-bottom: 2rem;
-        }
-        .how-to-use-content .step:last-child {
-            margin-bottom: 0;
-        }
-
-        .how-to-use-content h3 {
-            color: var(--primary-color);
-            margin: 0 0 0.5rem 0;
-            font-size: 1.1rem;
-            border-left: 4px solid var(--primary-color);
-            padding-left: 0.75rem;
-        }
-        
-        .how-to-use-content p {
-            margin: 0 0 1rem 0;
-            font-size: 0.95rem;
-            color: #333;
-        }
-        
-        .mock-image-container {
-            background-color: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+        /* 警告・注意バナー */
+        .notice-banner {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
             padding: 1rem;
-            box-shadow: 0 2px 4px var(--shadow-color);
-            font-size: 0.8rem;
-        }
-
-        .mock-textarea {
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.5rem;
-            min-height: 80px;
-            background-color: #f8f9fa;
-            color: #666;
-        }
-        
-        .mock-image-upload {
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.5rem;
-            background-color: #f8f9fa;
-        }
-        .mock-image-upload button {
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            padding: 0.3rem 0.6rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-        }
-
-        .mock-image-previews {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-
-        .mock-image-preview {
-            width: 40px;
-            height: 40px;
-            background-color: #e9ecef;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        
-        .mock-button {
-            padding: 0.8rem;
-            background-color: var(--primary-color);
-            color: white;
-            border-radius: 4px;
-            font-weight: 600;
-            text-align: center;
-        }
-        .mock-button.download {
-            margin-top: 1rem;
-        }
-        
-        .mock-previews-container {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .mock-slide-preview {
-            flex: 1;
-            background-color: #f8f9fa;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.5rem;
-        }
-        .mock-slide-number {
-            font-size: 0.6rem;
-            font-weight: bold;
-            color: #6c757d;
-            background-color: #e9ecef;
-            padding: 0.1rem 0.3rem;
-            border-radius: 12px;
-        }
-        .mock-slide-preview h4 { margin: 0.3rem 0; font-size: 0.7rem;}
-        .mock-slide-preview p { margin: 0; font-size: 0.6rem; }
-        .mock-slide-image {
-            height: 30px;
-            background-color: #e9ecef;
-            border-radius: 2px;
-            margin-top: 0.3rem;
-        }
-        
-        .input-section {
-            background-color: var(--surface-color);
-            padding: 2rem;
             border-radius: 8px;
-            box-shadow: 0 4px 6px var(--shadow-color);
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
         }
 
-        .form-group {
-            margin-bottom: 1.5rem;
+        .notice-banner ul {
+            margin: 0.5rem 0 0 0;
+            padding-left: 1.5rem;
+        }
+
+        .input-card {
+            background: var(--surface-color);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
         }
 
         label {
             display: block;
-            font-weight: 600;
+            font-weight: bold;
             margin-bottom: 0.5rem;
         }
 
-        textarea, input[type="file"] {
+        textarea {
             width: 100%;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            min-height: 120px;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
             font-size: 1rem;
             box-sizing: border-box;
+            margin-bottom: 1rem;
         }
 
-        textarea {
-            min-height: 150px;
-            resize: vertical;
-        }
-
-        input[type="file"]::file-selector-button {
-            background-color: var(--secondary-color);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        
-        input[type="file"]::file-selector-button:hover {
-            background-color: #5a6268;
-        }
-
-        #image-preview {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        #image-preview img {
-            width: 100%;
-            height: 100px;
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
+        .file-input-wrapper {
+            margin-bottom: 1rem;
         }
 
         .action-button {
-            display: block;
             width: 100%;
             padding: 1rem;
-            background-color: var(--primary-color);
+            background: var(--primary-color);
             color: white;
             border: none;
-            border-radius: 4px;
-            font-size: 1.2rem;
-            font-weight: 600;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
+            transition: opacity 0.2s;
         }
 
-        .action-button:hover {
-            background-color: #0056b3;
-        }
+        .action-button:hover { opacity: 0.9; }
+        .action-button:disabled { background: #ccc; cursor: not-allowed; }
 
-        .action-button:active {
-            transform: translateY(1px);
-        }
-        
-        .action-button:disabled {
-            background-color: #a0c7ef;
-            cursor: not-allowed;
-        }
-
-        #presentation-output {
-            margin-top: 2rem;
-            text-align: center;
-        }
-        
-        #presentation-output h2 {
-            text-align: center;
-            color: var(--secondary-color);
-            margin-bottom: 1.5rem;
-        }
-
-        #slide-previews-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-            text-align: left;
-        }
+        #presentation-output { margin-top: 2rem; }
 
         .slide-preview {
-            background-color: var(--surface-color);
-            border: 1px solid var(--border-color);
+            background: white;
+            border: 1px solid #eee;
             border-radius: 8px;
-            padding: 1rem;
-            box-shadow: 0 4px 6px var(--shadow-color);
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            animation: fadeIn 0.5s ease-in-out;
-        }
-
-        .slide-preview .slide-number {
-            font-size: 0.8rem;
-            font-weight: bold;
-            color: var(--secondary-color);
-            align-self: flex-start;
-            background-color: #e9ecef;
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-        }
-
-        .slide-preview h3 {
-            margin: 0;
-            font-size: 1.1rem;
-            color: var(--primary-color);
-        }
-
-        .slide-content-preview p {
-            font-size: 0.9rem;
-            margin: 0 0 0.5rem 0;
-            line-height: 1.5;
-            color: #495057;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .slide-preview img {
             width: 100%;
-            height: auto;
-            max-height: 150px;
-            object-fit: cover;
             border-radius: 4px;
-            margin-top: 0.5rem;
+            margin-top: 1rem;
         }
 
         .status-message {
-            font-weight: 500;
-            color: var(--secondary-color);
-            background: #fff;
+            background: var(--info-bg);
+            border: 1px solid var(--info-border);
             padding: 1rem;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            display: inline-block;
+            text-align: center;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        #image-preview {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
         }
 
-        @media (max-width: 600px) {
-            body {
-                padding: 1rem;
-            }
-            .input-section, .slide-preview {
-                padding: 1.5rem;
-            }
-            h1 {
-                font-size: 1.8rem;
-            }
+        #image-preview img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .slide-number {
+            font-size: 0.8rem;
+            color: #888;
+            font-weight: bold;
         }
     </style>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0"
-  }
-}
-</script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0"
+      }
+    }
+    </script>
 </head>
 <body>
-
     <div class="container">
-        <h1>プレゼンテーション自動生成アプリ</h1>
-
-        <details class="how-to-use">
-            <summary>✨ 使い方ガイド ✨</summary>
-            <div class="how-to-use-content">
-                <div class="step">
-                    <h3>ステップ1: 原稿を入力</h3>
-                    <p>伝えたい内容を「プレゼンテーション原稿」の欄に自由に入力してください。</p>
-                    <div class="mock-image-container">
-                        <div class="mock-textarea">
-                            <strong>プレゼンテーション原稿</strong><br>
-                            AIが市場の最新トレンドを分析し、私たちのビジネスに与える影響について説明します...
-                        </div>
-                    </div>
-                </div>
-                <div class="step">
-                    <h3>ステップ2: 画像をアップロード (任意)</h3>
-                    <p>プレゼンテーションに使用したい画像があれば、アップロードします。AIが内容に最適な画像を判断して使用します。</p>
-                    <div class="mock-image-container">
-                        <div class="mock-image-upload">
-                            <strong>画像ファイル</strong><br>
-                            <button>ファイルを選択</button> <span>image1.png, chart.jpg</span>
-                        </div>
-                        <div class="mock-image-previews">
-                            <div class="mock-image-preview"></div>
-                            <div class="mock-image-preview"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="step">
-                    <h3>ステップ3: プレゼンテーションを生成</h3>
-                    <p>「プレゼンテーションを生成」ボタンをクリックすると、AIがスライドの作成を開始します。</p>
-                     <div class="mock-image-container">
-                        <div class="mock-button">プレゼンテーションを生成</div>
-                    </div>
-                </div>
-                <div class="step">
-                    <h3>ステップ4: プレビューとダウンロード</h3>
-                    <p>生成されたスライドのプレビューが表示されます。内容を確認し、「PowerPointをダウンロード」ボタンでファイルを保存してください。</p>
-                     <div class="mock-image-container">
-                        <div class="mock-previews-container">
-                            <div class="mock-slide-preview">
-                                <span class="mock-slide-number">スライド 1</span>
-                                <h4>タイトル</h4>
-                                <p>1. 内容...</p>
-                                <div class="mock-slide-image"></div>
-                            </div>
-                             <div class="mock-slide-preview">
-                                <span class="mock-slide-number">スライド 2</span>
-                                <h4>タイトル</h4>
-                                <p>・内容...</p>
-                                <div class="mock-slide-image"></div>
-                            </div>
-                        </div>
-                        <div class="mock-button download">PowerPointをダウンロード</div>
-                    </div>
-                </div>
-            </div>
-        </details>
-
-        <div class="input-section">
-            <div class="form-group">
-                <label for="script-input">プレゼンテーション原稿</label>
-                <textarea id="script-input" placeholder="プレゼンテーションで伝えたい内容を自由に入力してください。AIが最適なスライド構成を提案します。" aria-label="プレゼンテーション原稿"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="image-input">画像ファイル (複数選択可)</label>
-                <input type="file" id="image-input" multiple accept=".jpg, .jpeg, .png, .gif" aria-label="画像ファイル">
-            </div>
-
-            <div id="image-preview"></div>
+        <div class="header">
+            <h1>プレゼン生成 AI <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 6px; border-radius: 4px;">FREE</span></h1>
         </div>
 
-        <button id="generate-btn" class="action-button">プレゼンテーションを生成</button>
+        <div class="notice-banner">
+            <strong>⚠️ 無料版の制限事項とご注意</strong>
+            <ul>
+                <li><strong>レート制限:</strong> 1分間に多数のリクエストを送るとエラー（429）が発生します。画像生成は1枚ずつゆっくり行われます。</li>
+                <li><strong>データ利用:</strong> 無料枠のAPIを使用しているため、入力した内容はGoogleのモデル改善に使用される場合があります。機密情報の入力は控えてください。</li>
+                <li><strong>生成速度:</strong> 制限を回避するため、意図的にスローダウンさせています。</li>
+            </ul>
+        </div>
+
+        <div class="input-card">
+            <label for="script-input">原稿（スライドにしたい内容）</label>
+            <textarea id="script-input" placeholder="例：新商品の特徴、市場分析の結果、プロジェクトの進捗など..."></textarea>
+            
+            <div class="file-input-wrapper">
+                <label for="image-input">参考画像（任意・複数可）</label>
+                <input type="file" id="image-input" multiple accept="image/*">
+            </div>
+            <div id="image-preview"></div>
+
+            <button id="generate-btn" class="action-button">プレゼンテーションを生成</button>
+        </div>
 
         <div id="presentation-output" aria-live="polite"></div>
     </div>

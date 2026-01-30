@@ -4,6 +4,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 // TypeScript declaration for the PptxGenJS library loaded from a script tag
 declare var PptxGenJS: any;
 
+// Utility function to wait for a specified time
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // Helper function to convert a File object to a GoogleGenerativeAI.Part object
 async function fileToGenerativePart(file: File) {
     const base64EncodedDataPromise = new Promise<string>((resolve) => {
@@ -68,37 +71,30 @@ function getBase64ImageDimensions(base64: string): Promise<{ width: number; heig
 
 // Ensure the DOM is fully loaded before running the script
 document.addEventListener('DOMContentLoaded', () => {
-    // Select all necessary DOM elements
     const scriptInput = document.getElementById('script-input') as HTMLTextAreaElement;
     const imageInput = document.getElementById('image-input') as HTMLInputElement;
     const imagePreview = document.getElementById('image-preview') as HTMLDivElement;
     const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
     const presentationOutput = document.getElementById('presentation-output') as HTMLDivElement;
 
-    // Early exit if any essential element is not found
     if (!scriptInput || !imageInput || !imagePreview || !generateBtn || !presentationOutput) {
-        console.error("A required DOM element was not found. The application cannot start.");
+        console.error("Required DOM elements missing.");
         return;
     }
     
-    // Variables to store generated content for download
     let finalSlidesContent: { title: string; content: string[]; imageIndex: number; imageGenerationPrompt?: string }[] | null = null;
     let finalSlideImagesData: ({ base64: string; dims: { width: number; height: number; }; } | null)[] | null = null;
 
-    // Event listener for image input to show previews
     imageInput.addEventListener('change', () => {
-        imagePreview.innerHTML = ''; // Clear previous previews
+        imagePreview.innerHTML = '';
         const files = imageInput.files;
         if (!files) return;
 
-        // Create and display a preview for each selected image file
         for (const file of files) {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = document.createElement('img');
-                if (e.target?.result) {
-                    img.src = e.target.result as string;
-                }
+                if (e.target?.result) img.src = e.target.result as string;
                 img.alt = `Preview: ${file.name}`;
                 imagePreview.appendChild(img);
             };
@@ -106,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Event listener for the generate button
     generateBtn.addEventListener('click', async () => {
         const scriptText = scriptInput.value.trim();
         const imageFiles = imageInput.files;
@@ -116,35 +111,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Reset stored data
         finalSlidesContent = null;
         finalSlideImagesData = null;
-
-        // Set loading state on UI elements
         generateBtn.disabled = true;
         generateBtn.textContent = '生成中...';
-        presentationOutput.innerHTML = '<p class="status-message">AIがスライド構成を分析しています。少々お待ちください...</p>';
+        presentationOutput.innerHTML = '<p class="status-message">AIがスライド構成を分析しています...</p>';
 
         try {
-            // Re-initialize AI client here to ensure it uses the current process.env.API_KEY
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
             const imageCount = imageFiles?.length ?? 0;
-            const prompt = `あなたはプレゼンテーション作成の専門家です。以下のテキストと${imageCount > 0 ? `提供された${imageCount}枚の画像` : 'テキスト'}を解析し、最適なプレゼンテーションを構成してください。
+            
+            const prompt = `あなたはプレゼンテーション作成の専門家です。以下のテキストを解析し、各スライドに必ず1枚の画像が含まれる魅力的なプレゼンテーション（スライド構成）を作成してください。
 
-各スライドについて、明確なタイトルと本文の箇条書きを作成してください。
-本文の箇条書きは、内容に応じて番号付きリスト（例：1.、2.、3.）または通常の箇条書きにしてください。リストの先頭に絵文字やアイコンは使用しないでください。
+**最優先の制約事項:**
+1. すべてのスライドに必ず画像が含まれている必要があります。
+2. 提供された画像（${imageCount}枚）がある場合、内容に合うものがあればそれを使用してください。
+3. 提供された画像がない場合、または提供された画像が内容に合わない場合は、必ず 'imageIndex' を -1 に設定し、そのスライドに最適な画像を生成するための詳細な英語プロンプトを 'imageGenerationPrompt' に作成してください。
 
-各スライドの内容を考慮し、${imageCount > 0 ? `提供された画像の中から最も適切なものを割り当ててください。もし提供された画像の中に適切なものがない、あるいはさらに良い画像が考えられる場合は、新しい画像を生成するように指示してください。` : '各スライドに最適な画像を生成するように指示してください。'}
-
-出力は、各オブジェクトがスライドを表すJSON配列として提供してください。
-各オブジェクトには以下を含めてください。
+各スライドについて：
 - 'title': スライドのタイトル
-- 'content': スライドの本文（箇条書きの配列）
-- 'imageIndex': ${imageCount > 0 ? `提供された画像を使用する場合、その画像の0から始まるインデックス。新しい画像を生成する場合は -1 を指定してください。` : `常に -1 を指定してください。`}
-- 'imageGenerationPrompt': 'imageIndex'が-1の場合にのみ、画像を生成するための詳細でクリエイティブな**英語のプロンプト**を含めてください。写実的な写真(photorealistic)や、モダンなイラスト(modern illustration)など、スタイルも指定してください。
+- 'content': 箇条書きの本文（配列）
+- 'imageIndex': 提供画像を使う場合は 0 からのインデックス。新規生成なら -1。
+- 'imageGenerationPrompt': 'imageIndex' が -1 の場合に必須。写真のような高品質な英語プロンプト。
 
-${imageCount > 0 ? `提供されたすべての画像が必ずしも使われる必要はありません。内容に合わない場合は無理に使用せず、新しい画像を生成してください。` : ''}
 ---
 ${scriptText}
 ---`;
@@ -154,259 +143,161 @@ ${scriptText}
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    title: {
-                      type: Type.STRING,
-                      description: 'スライドのタイトル',
-                    },
-                    content: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.STRING,
-                      },
-                      description: 'スライドの本文コンテンツ（箇条書きの配列）。絵文字は含めないでください。',
-                    },
-                    imageIndex: {
-                        type: Type.INTEGER,
-                        description: `使用する提供画像の0ベースのインデックス。新しい画像を生成する場合は-1を指定してください。`,
-                    },
-                    imageGenerationPrompt: {
-                        type: Type.STRING,
-                        description: 'imageIndexが-1の場合に、新しい画像を生成するための詳細な英語のプロンプト。',
-                    }
+                    title: { type: Type.STRING },
+                    content: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    imageIndex: { type: Type.INTEGER },
+                    imageGenerationPrompt: { type: Type.STRING, description: "imageIndexが-1の場合に必須の詳細な英語プロンプト" }
                   },
-                  required: ['title', 'content', 'imageIndex'],
+                  required: ['title', 'content', 'imageIndex', 'imageGenerationPrompt'],
                 },
             };
 
             const textPart = { text: prompt };
             const imageParts = imageFiles ? await Promise.all(Array.from(imageFiles).map(fileToGenerativePart)) : [];
-            const contents = { parts: [textPart, ...imageParts] };
-
-            // Call the Gemini API to generate content structure using Gemini 3 Flash
+            
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: contents,
+                contents: { parts: [textPart, ...imageParts] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema,
                 }
             });
 
-            const jsonResponse = response.text.trim();
-            const slidesContent: { title: string; content: string[]; imageIndex: number; imageGenerationPrompt?: string }[] = JSON.parse(jsonResponse);
+            const slidesContent: { title: string; content: string[]; imageIndex: number; imageGenerationPrompt?: string }[] = JSON.parse(response.text.trim());
             
             presentationOutput.innerHTML = '<p class="status-message">スライドの画像を準備しています...</p>';
 
             const imageBase64s = imageFiles ? await Promise.all(Array.from(imageFiles).map(fileToBase64)) : [];
             const imageDims = imageFiles ? await Promise.all(Array.from(imageFiles).map(getImageDimensions)) : [];
-
             const generatedImages: ({ base64: string; dims: { width: number; height: number; }; } | null)[] = [];
             
-            // Generate images sequentially to avoid hitting API rate limits
             for (const [index, slideData] of slidesContent.entries()) {
+                // Free Tier対策：画像生成の間に2秒のウェイトを置く
+                if (index > 0) await sleep(2000);
+
                 if (slideData.imageIndex >= 0 && imageBase64s[slideData.imageIndex]) {
-                    // Use an existing image
                     generatedImages.push({
                         base64: imageBase64s[slideData.imageIndex],
                         dims: imageDims[slideData.imageIndex],
                     });
-                } else if (slideData.imageGenerationPrompt) {
-                    // Generate a new image using Gemini 2.5 Flash Image
-                    presentationOutput.innerHTML = `<p class="status-message">スライド ${index + 1}/${slidesContent.length} の画像を生成中...<br><small>${slideData.imageGenerationPrompt}</small></p>`;
+                } else {
+                    // imageIndex が -1、または提供画像が不正な場合
+                    const genPrompt = slideData.imageGenerationPrompt || `A high quality, professional presentation slide image for "${slideData.title}", modern style.`;
+                    
+                    presentationOutput.innerHTML = `<p class="status-message">スライド ${index + 1}/${slidesContent.length} の画像を生成中...<br><small>API制限を考慮しつつ1枚ずつ作成しています</small></p>`;
+                    
                     try {
                         const imageResponse = await ai.models.generateContent({
                             model: 'gemini-2.5-flash-image',
-                            contents: {
-                                parts: [{ text: slideData.imageGenerationPrompt }]
-                            },
-                            config: {
-                                imageConfig: {
-                                    aspectRatio: "16:9"
-                                }
-                            }
+                            contents: { parts: [{ text: genPrompt }] },
+                            config: { imageConfig: { aspectRatio: "16:9" } }
                         });
 
-                        let foundImage = false;
+                        let found = false;
                         if (imageResponse.candidates?.[0]?.content?.parts) {
                             for (const part of imageResponse.candidates[0].content.parts) {
                                 if (part.inlineData) {
-                                    const base64ImageBytes = part.inlineData.data;
-                                    const imageUrl = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
-                                    const dims = await getBase64ImageDimensions(base64ImageBytes);
-                                    generatedImages.push({ base64: imageUrl, dims });
-                                    foundImage = true;
+                                    const dims = await getBase64ImageDimensions(part.inlineData.data);
+                                    generatedImages.push({ base64: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`, dims });
+                                    found = true;
                                     break;
                                 }
                             }
                         }
-            
-                        if (!foundImage) {
-                            console.warn(`No image returned in response for slide ${index + 1}`);
+                        
+                        if (!found) {
+                            console.warn("No image part found for slide", index);
                             generatedImages.push(null);
                         }
-            
-                    } catch (genError) {
-                        console.error(`Error generating image for slide ${index + 1}:`, genError);
-                        let errorMessage = `スライド ${index + 1} の画像生成に失敗しました。`;
-                        if (String(genError).includes('429')) {
-                            errorMessage += ' APIの利用制限に達した可能性があります。';
+                    } catch (err) {
+                        console.error("Image gen error for slide", index, err);
+                        if (String(err).includes('429')) {
+                            presentationOutput.innerHTML += `<p style="color: #d9534f; font-size: 0.8rem;">[制限通知] APIリクエスト上限に達しました。一部の画像がスキップされる可能性があります。</p>`;
                         }
-                        presentationOutput.innerHTML += `<p style="color: orange; font-size: 0.8rem;">${errorMessage} このスライドは画像なしで作成されます。</p>`;
                         generatedImages.push(null);
                     }
-                } else {
-                    // No image for this slide
-                    generatedImages.push(null);
                 }
             }
 
-            // Store generated data for the download button
             finalSlidesContent = slidesContent;
             finalSlideImagesData = generatedImages;
 
-            // --- Render Slide Previews ---
-            presentationOutput.innerHTML = ''; // Clear status message
-            const previewHeader = document.createElement('h2');
-            previewHeader.textContent = '生成されたスライドのプレビュー';
-            presentationOutput.appendChild(previewHeader);
-
-            const previewContainer = document.createElement('div');
-            previewContainer.id = 'slide-previews-container';
-            presentationOutput.appendChild(previewContainer);
+            presentationOutput.innerHTML = '<h2>プレビュー</h2><div id="slide-previews-container"></div>';
+            const container = document.getElementById('slide-previews-container')!;
 
             slidesContent.forEach((slideData, index) => {
-                const slidePreview = document.createElement('div');
-                slidePreview.className = 'slide-preview';
-
-                const slideNumber = document.createElement('span');
-                slideNumber.className = 'slide-number';
-                slideNumber.textContent = `スライド ${index + 1}`;
-                slidePreview.appendChild(slideNumber);
-    
-                const slideTitle = document.createElement('h3');
-                slideTitle.textContent = slideData.title;
-                slidePreview.appendChild(slideTitle);
-    
-                const slideContentPreview = document.createElement('div');
-                slideContentPreview.className = 'slide-content-preview';
-                slideContentPreview.innerHTML = slideData.content.map(p => `<p>${p.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`).join('');
-                slidePreview.appendChild(slideContentPreview);
-    
-                const imageData = generatedImages[index];
-                if (imageData) {
+                const div = document.createElement('div');
+                div.className = 'slide-preview';
+                div.innerHTML = `
+                    <span class="slide-number">スライド ${index + 1}</span>
+                    <h3>${slideData.title}</h3>
+                    <div class="slide-content-preview">${slideData.content.map(p => `<p>${p}</p>`).join('')}</div>
+                `;
+                if (generatedImages[index]) {
                     const img = document.createElement('img');
-                    img.src = imageData.base64;
-                    img.alt = `Slide ${index + 1} image preview`;
-                    slidePreview.appendChild(img);
+                    img.src = generatedImages[index]!.base64;
+                    div.appendChild(img);
+                } else {
+                    div.innerHTML += `<p style="color: #999; font-size: 0.8rem; border: 1px dashed #ccc; padding: 1rem; text-align: center;">画像なし（生成エラー）</p>`;
                 }
-    
-                previewContainer.appendChild(slidePreview);
+                container.appendChild(div);
             });
 
-            // --- Add Download Button ---
-            const downloadButton = document.createElement('button');
-            downloadButton.id = 'download-btn';
-            downloadButton.className = 'action-button';
-            downloadButton.textContent = 'PowerPointをダウンロード';
-            downloadButton.style.marginTop = '2rem';
-            presentationOutput.appendChild(downloadButton);
+            const dlBtn = document.createElement('button');
+            dlBtn.id = 'download-btn';
+            dlBtn.className = 'action-button';
+            dlBtn.textContent = 'PowerPointをダウンロード';
+            dlBtn.style.marginTop = '2rem';
+            presentationOutput.appendChild(dlBtn);
 
         } catch (error) {
-            console.error("Error generating presentation:", error);
-            presentationOutput.innerHTML = '<p style="color: red;">生成中にエラーが発生しました。設定や入力内容を確認してください。</p>';
-            alert('プレゼンテーションの生成中にエラーが発生しました。');
+            console.error(error);
+            let msg = '生成中にエラーが発生しました。';
+            if (String(error).includes('429')) msg = 'APIの利用制限（1分あたりの上限）に達しました。少し時間を置いてから再度お試しください。';
+            presentationOutput.innerHTML = `<p style="color: red;">${msg}</p>`;
         } finally {
-            // Reset UI elements from loading state
             generateBtn.disabled = false;
             generateBtn.textContent = 'プレゼンテーションを生成';
         }
     });
 
-    // Event listener for the download button (using event delegation)
     presentationOutput.addEventListener('click', async (event) => {
         const target = event.target as HTMLElement;
-        if (target.id !== 'download-btn' || !finalSlidesContent || !finalSlideImagesData) {
-            return;
-        }
+        if (target.id !== 'download-btn' || !finalSlidesContent || !finalSlideImagesData) return;
 
-        const downloadBtn = target as HTMLButtonElement;
-        downloadBtn.disabled = true;
-        downloadBtn.textContent = 'PowerPointファイルを生成中...';
+        const btn = target as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'ファイルを準備中...';
 
         try {
-            // Create a new PowerPoint presentation
             const pptx = new PptxGenJS();
-            
-            finalSlidesContent.forEach((slideData, slideIndex) => {
+            finalSlidesContent.forEach((slideData, i) => {
                 const slide = pptx.addSlide();
-
-                // Add title
-                slide.addText(slideData.title, { 
-                    x: 0.5, y: 0.25, w: 9, h: 0.75, 
-                    fontSize: 28, bold: true, color: '00529B' 
-                });
-
-                const imageData = finalSlideImagesData[slideIndex];
-                const textContent = slideData.content.join('\n\n');
+                slide.addText(slideData.title, { x: 0.5, y: 0.25, w: 9, h: 0.75, fontSize: 24, bold: true, color: '00529B' });
                 
-                if (imageData) {
-                    // --- SLIDE WITH IMAGE ---
-                    const { base64: imageBase64, dims } = imageData;
-                    const { width: originalWidth, height: originalHeight } = dims;
-                    
-                    const layoutType = slideIndex % 2 === 0 ? 'imageRight' : 'imageLeft';
-
-                    let textOptions: any;
-                    let imageArea: { x: number; y: number; w: number; h: number; };
-
-                    if (layoutType === 'imageRight') {
-                        textOptions = { x: 0.5, y: 1.2, w: 5.0, h: 4.2, fontSize: 14, valign: 'top' };
-                        imageArea = { x: 6.0, y: 1.2, w: 3.5, h: 4.2 };
-                    } else { // imageLeft
-                        textOptions = { x: 4.5, y: 1.2, w: 5.0, h: 4.2, fontSize: 14, valign: 'top' };
-                        imageArea = { x: 0.5, y: 1.2, w: 3.5, h: 4.2 };
-                    }
-                    
-                    slide.addText(textContent, textOptions);
-
-                    const aspectRatio = originalWidth / originalHeight;
-                    const maxBoxAspectRatio = imageArea.w / imageArea.h;
-
-                    let newWidth, newHeight;
-                    if (aspectRatio > maxBoxAspectRatio) {
-                        newWidth = imageArea.w;
-                        newHeight = newWidth / aspectRatio;
+                const img = finalSlideImagesData![i];
+                if (img) {
+                    // 画像がある場合は左右分割レイアウト（奇数偶数で入れ替え）
+                    const isEven = i % 2 === 0;
+                    if (isEven) {
+                        slide.addText(slideData.content.join('\n\n'), { x: 0.5, y: 1.2, w: 4.5, h: 4, fontSize: 14, valign: 'top' });
+                        slide.addImage({ data: img.base64, x: 5.2, y: 1.2, w: 4.3, h: 3.5 });
                     } else {
-                        newHeight = imageArea.h;
-                        newWidth = newHeight * aspectRatio;
+                        slide.addImage({ data: img.base64, x: 0.5, y: 1.2, w: 4.3, h: 3.5 });
+                        slide.addText(slideData.content.join('\n\n'), { x: 5.0, y: 1.2, w: 4.5, h: 4, fontSize: 14, valign: 'top' });
                     }
-
-                    const newX = imageArea.x + (imageArea.w - newWidth) / 2;
-                    const newY = imageArea.y + (imageArea.h - newHeight) / 2;
-
-                    slide.addImage({ 
-                        data: imageBase64, 
-                        x: newX, y: newY, w: newWidth, h: newHeight
-                    });
                 } else {
-                    // --- SLIDE WITHOUT IMAGE (TEXT ONLY) ---
-                    slide.addText(textContent, { 
-                        x: 0.5, y: 1.2, w: 9, h: 4.2, 
-                        fontSize: 16, valign: 'top' 
-                    });
+                    slide.addText(slideData.content.join('\n\n'), { x: 0.5, y: 1.2, w: 9, h: 4, fontSize: 16, valign: 'top' });
                 }
             });
-
-            await pptx.writeFile({ fileName: 'AI-Generated-Presentation.pptx' });
-            
-            downloadBtn.textContent = 'ダウンロード完了！';
-            downloadBtn.style.backgroundColor = '#28a745';
-
-        } catch (error) {
-            console.error("Error writing PowerPoint file:", error);
-            downloadBtn.textContent = 'エラーが発生しました';
-            downloadBtn.style.backgroundColor = '#dc3545';
-            alert('PowerPointファイルの生成中にエラーが発生しました。');
+            await pptx.writeFile({ fileName: 'AI_Presentation.pptx' });
+            btn.textContent = 'ダウンロード完了';
+        } catch (err) {
+            console.error(err);
+            btn.textContent = 'エラー発生';
+        } finally {
+            btn.disabled = false;
         }
     });
 });

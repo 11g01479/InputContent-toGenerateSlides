@@ -4,8 +4,47 @@ import { GoogleGenAI, Type } from "@google/genai";
 // TypeScript declaration for the PptxGenJS library loaded from a script tag
 declare var PptxGenJS: any;
 
+// Constants for quota management
+const DAILY_QUOTA_LIMIT = 100;
+const STORAGE_KEY_COUNT = 'ai_presentation_gen_count';
+const STORAGE_KEY_DATE = 'ai_presentation_gen_date';
+
 // Utility function to wait for a specified time
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Quota Helper Functions
+function getRemainingQuota(): number {
+    const today = new Date().toLocaleDateString();
+    const storedDate = localStorage.getItem(STORAGE_KEY_DATE);
+    
+    if (storedDate !== today) {
+        localStorage.setItem(STORAGE_KEY_DATE, today);
+        localStorage.setItem(STORAGE_KEY_COUNT, '0');
+        return DAILY_QUOTA_LIMIT;
+    }
+    
+    const count = parseInt(localStorage.getItem(STORAGE_KEY_COUNT) || '0', 10);
+    return Math.max(0, DAILY_QUOTA_LIMIT - count);
+}
+
+function incrementUsage() {
+    const count = parseInt(localStorage.getItem(STORAGE_KEY_COUNT) || '0', 10);
+    localStorage.setItem(STORAGE_KEY_COUNT, (count + 1).toString());
+    updateQuotaDisplay();
+}
+
+function updateQuotaDisplay() {
+    const remaining = getRemainingQuota();
+    const displayElement = document.getElementById('remaining-quota-display');
+    if (displayElement) {
+        displayElement.textContent = `本日あと ${remaining} 回利用可能`;
+        if (remaining <= 0) {
+            displayElement.style.color = 'var(--error-color)';
+            const genBtn = document.getElementById('generate-btn') as HTMLButtonElement;
+            if (genBtn) genBtn.disabled = true;
+        }
+    }
+}
 
 // Helper function to convert a File object to a GoogleGenerativeAI.Part object
 async function fileToGenerativePart(file: File) {
@@ -30,7 +69,7 @@ async function fileToGenerativePart(file: File) {
 function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string); // result is data:mime/type;base64,...
+        reader.onload = () => resolve(reader.result as string);
         reader.onerror = error => reject(error);
         reader.readAsDataURL(file);
     });
@@ -77,6 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
     const presentationOutput = document.getElementById('presentation-output') as HTMLDivElement;
 
+    // Initial quota display
+    updateQuotaDisplay();
+
     if (!scriptInput || !imageInput || !imagePreview || !generateBtn || !presentationOutput) {
         console.error("Required DOM elements missing.");
         return;
@@ -103,6 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     generateBtn.addEventListener('click', async () => {
+        if (getRemainingQuota() <= 0) {
+            alert('本日の利用上限に達しました。明日またお試しください。');
+            return;
+        }
+
         const scriptText = scriptInput.value.trim();
         const imageFiles = imageInput.files;
         
@@ -173,7 +220,6 @@ ${scriptText}
             const generatedImages: ({ base64: string; dims: { width: number; height: number; }; } | null)[] = [];
             
             for (const [index, slideData] of slidesContent.entries()) {
-                // Free Tier対策：画像生成の間に2秒のウェイトを置く
                 if (index > 0) await sleep(2000);
 
                 if (slideData.imageIndex >= 0 && imageBase64s[slideData.imageIndex]) {
@@ -182,9 +228,7 @@ ${scriptText}
                         dims: imageDims[slideData.imageIndex],
                     });
                 } else {
-                    // imageIndex が -1、または提供画像が不正な場合
                     const genPrompt = slideData.imageGenerationPrompt || `A high quality, professional presentation slide image for "${slideData.title}", modern style.`;
-                    
                     presentationOutput.innerHTML = `<p class="status-message">スライド ${index + 1}/${slidesContent.length} の画像を生成中...<br><small>API制限を考慮しつつ1枚ずつ作成しています</small></p>`;
                     
                     try {
@@ -205,16 +249,9 @@ ${scriptText}
                                 }
                             }
                         }
-                        
-                        if (!found) {
-                            console.warn("No image part found for slide", index);
-                            generatedImages.push(null);
-                        }
+                        if (!found) generatedImages.push(null);
                     } catch (err) {
-                        console.error("Image gen error for slide", index, err);
-                        if (String(err).includes('429')) {
-                            presentationOutput.innerHTML += `<p style="color: #d9534f; font-size: 0.8rem;">[制限通知] APIリクエスト上限に達しました。一部の画像がスキップされる可能性があります。</p>`;
-                        }
+                        console.error(err);
                         generatedImages.push(null);
                     }
                 }
@@ -251,13 +288,16 @@ ${scriptText}
             dlBtn.style.marginTop = '2rem';
             presentationOutput.appendChild(dlBtn);
 
+            // Successfully finished generation, increment usage
+            incrementUsage();
+
         } catch (error) {
             console.error(error);
             let msg = '生成中にエラーが発生しました。';
             if (String(error).includes('429')) msg = 'APIの利用制限（1分あたりの上限）に達しました。少し時間を置いてから再度お試しください。';
             presentationOutput.innerHTML = `<p style="color: red;">${msg}</p>`;
         } finally {
-            generateBtn.disabled = false;
+            generateBtn.disabled = (getRemainingQuota() <= 0);
             generateBtn.textContent = 'プレゼンテーションを生成';
         }
     });
@@ -275,10 +315,8 @@ ${scriptText}
             finalSlidesContent.forEach((slideData, i) => {
                 const slide = pptx.addSlide();
                 slide.addText(slideData.title, { x: 0.5, y: 0.25, w: 9, h: 0.75, fontSize: 24, bold: true, color: '00529B' });
-                
                 const img = finalSlideImagesData![i];
                 if (img) {
-                    // 画像がある場合は左右分割レイアウト（奇数偶数で入れ替え）
                     const isEven = i % 2 === 0;
                     if (isEven) {
                         slide.addText(slideData.content.join('\n\n'), { x: 0.5, y: 1.2, w: 4.5, h: 4, fontSize: 14, valign: 'top' });
